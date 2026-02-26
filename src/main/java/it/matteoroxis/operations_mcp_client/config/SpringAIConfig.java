@@ -1,15 +1,15 @@
 package it.matteoroxis.operations_mcp_client.config;
 
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.ai.chat.client.ChatClient;
-
 
 @Configuration
 public class SpringAIConfig {
 
     @Bean
-    public ChatClient openAiChatClient() {
-        return ChatClient.builder(openAiChatClient().build());
+    public ChatClient chatClient(OpenAiChatModel chatModel) {
+        return ChatClient.builder(chatModel).build();
     }
 }
