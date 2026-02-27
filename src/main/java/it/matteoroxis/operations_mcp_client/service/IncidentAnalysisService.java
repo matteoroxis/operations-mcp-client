@@ -9,6 +9,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 
@@ -35,38 +36,14 @@ public class IncidentAnalysisService {
 
             McpSchema.CallToolRequest recentIncidentsRequest = new McpSchema.CallToolRequest("getRecentIncidents", Map.of());
             McpSchema.CallToolResult recentIncidentsToolResult = mcpClient.callTool(recentIncidentsRequest);
-            Incident recentIncidentsTool = parseRecentIncident(recentIncidentsToolResult);
+            List<Incident> recentIncidents = parseRecentIncidents(recentIncidentsToolResult);
+
+            StringBuilder incidentsSection = buildIncidentsSection(recentIncidents);
 
             // Analysis with OpenAI via Spring AI ChatClient
             return chatClient
                     .prompt()
-                    .user(String.format(
-                            """
-                            Analyse the following system metrics and recent incidents and provide operational recommendations:
-                            
-                            - Average latency: %d ms
-                            - Error rate: %.2f%%
-                            - Timestamp: %s
-                            
-                             Recent Incident:
-                             - ID: %s
-                             - Title: %s
-                             - Status: %s
-                             - Occurred at: %s
-                            
-                            Constraints:
-                            1) Highlight possible causes (DB, network, CPU/memory saturation, external dependencies).
-                            2) Suggest actions in order of priority (quick wins -> structural interventions).
-                            3) Indicate any additional metrics to be collected.
-                            """,
-                            systemMetricsTool.avgLatencyMs(),
-                            systemMetricsTool.errorRate() * 100,
-                            systemMetricsTool.timestamp(),
-                            recentIncidentsTool.id(),
-                            recentIncidentsTool.title(),
-                            recentIncidentsTool.status(),
-                            recentIncidentsTool.timestamp()
-                    ))
+                    .user(buildUserPrompt(systemMetricsTool, incidentsSection))
                     .call()
                     .content();
         } catch (Exception e) {
@@ -74,7 +51,53 @@ public class IncidentAnalysisService {
         }
     }
 
-    private Incident parseRecentIncident(McpSchema.CallToolResult toolResult) {
+    private static String buildUserPrompt(SystemMetrics systemMetricsTool, StringBuilder incidentsSection) {
+        return String.format(
+                """
+                        Analyse the following system metrics and recent incidents and provide operational recommendations:
+                        
+                        - Average latency: %d ms
+                        - Error rate: %.2f%%
+                        - Timestamp: %s
+                        
+                          Recent Incidents:
+                          %s
+                        
+                        Constraints:
+                        1) Highlight possible causes (DB, network, CPU/memory saturation, external dependencies).
+                        2) Suggest actions in order of priority (quick wins -> structural interventions).
+                        3) Indicate any additional metrics to be collected.
+                        """,
+                systemMetricsTool.avgLatencyMs(),
+                systemMetricsTool.errorRate() * 100,
+                systemMetricsTool.timestamp(),
+                incidentsSection
+        );
+    }
+
+    private static StringBuilder buildIncidentsSection(List<Incident> recentIncidents) {
+        StringBuilder incidentsSection = new StringBuilder();
+        for (int i = 0; i < recentIncidents.size(); i++) {
+            Incident inc = recentIncidents.get(i);
+            incidentsSection.append(String.format(
+                    """
+                    Incident %d:
+                    - ID: %s
+                    - Title: %s
+                    - Status: %s
+                    - Occurred at: %s
+                    """,
+                    i + 1,
+                    inc.id(),
+                    inc.title(),
+                    inc.status(),
+                    inc.timestamp()
+            ));
+        }
+        return incidentsSection;
+    }
+
+    private List<Incident> parseRecentIncidents(McpSchema.CallToolResult toolResult) {
         try {
             String content = toolResult.content().stream()
                     .filter(c -> c instanceof McpSchema.TextContent)
@@ -82,20 +105,27 @@ public class IncidentAnalysisService {
                     .findFirst()
                     .orElse("");
 
-            if (content.contains("{")) {
+            System.out.println(content);
+
+            if (content.contains("[")) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> data = objectMapper.readValue(content, Map.class);
-                String id = (String) data.getOrDefault("id", "unknown");
-                String title = (String) data.getOrDefault("title", "N/A");
-                Instant timestamp = Instant.parse((String) data.getOrDefault("timestamp", Instant.now().toString()));
-                String status = (String) data.getOrDefault("status", "UNKNOWN");
-                return new Incident(id, title, timestamp, status);
+                List<Map<String, Object>> dataList = objectMapper.readValue(content, List.class);
+                return dataList.stream()
+                        .map(data -> {
+                            String id = (String) data.getOrDefault("id", "unknown");
+                            String title = (String) data.getOrDefault("title", "N/A");
+                            Instant timestamp = Instant.ofEpochSecond(
+                                    ((Number) data.getOrDefault("timestamp", 0)).longValue()
+                            );                            String status = (String) data.getOrDefault("status", "UNKNOWN");
+                            return new Incident(id, title, timestamp, status);
+                        })
+                        .toList();
             }
 
-            return new Incident("unknown", "N/A", Instant.now(), "UNKNOWN");
+            return List.of(new Incident("unknown", "N/A", Instant.now(), "UNKNOWN"));
 
         } catch (Exception _) {
-            return new Incident("unknown", "N/A", Instant.now(), "UNKNOWN");
+            return List.of(new Incident("unknown", "N/A", Instant.now(), "UNKNOWN"));
         }
     }
 
