@@ -36,33 +36,33 @@ public class IncidentAnalysisService {
             // 3) Parsing risultato
             SystemMetrics systemMetrics = parseSystemMetrics(toolResult);
 
-            return systemMetrics.toString();
+//            return systemMetrics.toString();
 
             // 4) Analisi con OpenAI via Spring AI ChatClient
-//            return chatClient
-//                    .prompt()
-//                    .user(String.format(
-//                            """
-//                            Analizza le seguenti metriche di sistema e fornisci raccomandazioni operative:
-//
-//                            - Latenza media: %d ms
-//                            - Tasso di errore: %.2f%%
-//                            - Timestamp: %s
-//
-//                            Vincoli:
-//                            1) Evidenzia possibili cause (DB, rete, saturazione CPU/memoria, dipendenze esterne).
-//                            2) Suggerisci azioni in ordine di priorità (quick wins -> interventi strutturali).
-//                            3) Indica eventuali metriche aggiuntive da raccogliere.
-//                            """,
-//                            systemMetrics.avgLatencyMs(),
-//                            systemMetrics.errorRate() * 100,
-//                            systemMetrics.timestamp()
-//                    ))
-//                    .call()
-//                    .content();
+            return chatClient
+                    .prompt()
+                    .user(String.format(
+                            """
+Analyse the following system metrics and provide operational recommendations:
+
+- Average latency: %d ms
+- Error rate: %.2f%%
+- Timestamp: %s
+
+                            Constraints:
+1) Highlight possible causes (DB, network, CPU/memory saturation, external dependencies).
+2) Suggest actions in order of priority (quick wins -> structural interventions).
+3) Indicate any additional metrics to be collected.
+                            """,
+                            systemMetrics.avgLatencyMs(),
+                            systemMetrics.errorRate() * 100,
+                            systemMetrics.timestamp()
+                    ))
+                    .call()
+                    .content();
 
         } catch (Exception e) {
-            return "Errore durante l'analisi: " + e.getMessage();
+            return "Error during the analysis: " + e.getMessage();
         }
     }
 
