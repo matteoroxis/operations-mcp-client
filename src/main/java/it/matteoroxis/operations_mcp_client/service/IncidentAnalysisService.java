@@ -35,7 +35,7 @@ public class IncidentAnalysisService {
 
             McpSchema.CallToolRequest recentIncidentsRequest = new McpSchema.CallToolRequest("getRecentIncidents", Map.of());
             McpSchema.CallToolResult recentIncidentsToolResult = mcpClient.callTool(recentIncidentsRequest);
-            Incident recentIncidentsTool = parseRecentIncident(systemMetricsToolResult);
+            Incident recentIncidentsTool = parseRecentIncident(recentIncidentsToolResult);
 
             // Analysis with OpenAI via Spring AI ChatClient
             return chatClient
